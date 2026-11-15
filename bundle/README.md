@@ -32,7 +32,7 @@ All paths are relative or derived from `location` / `import.meta.url`, so you ca
 2. **A wisp backend** — epoxy connects over WebSocket to a wisp server that relays TCP. Run one and expose it where `WISP` points (default `/wisp/` on the page's origin):
 
    ```sh
-   npx @mercuryworkshop/wisp-js serve   # maintained; wisp-server-node is deprecated
+   npx @mercuryworkshop/wisp-js   # maintained; wisp-server-node is deprecated
    ```
 
    Co-host it at `/wisp/`, or set `WISP` in `register.js` to a different server, e.g. `wss://my-wisp.example/`.
