@@ -3,7 +3,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; style-src 'sha256-8uhB0iH9O6PK9lgaG+FBiaTF/iPxD8a8TSGBqcPHmpw='; script-src 'sha256-vk0fJ4yGAOLKXz2L7rSZaFUC/Znr1dh6j/lH0oa6NdI='; connect-src https://huggingface.co https://*.hf.co; frame-src 'self' https:; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+  content="default-src 'none'; style-src 'sha256-VG0UAWW4kWRSQNatTtcfL76IMo3zZOyXHQK5FYA/ruw='; script-src 'sha256-pjivnXwK1qtpYWyMNlBfl15udJ6qrnsy1rjvGOOt7Pk='; connect-src https://huggingface.co https://*.hf.co; frame-src 'self' https:; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
 <meta name="referrer" content="no-referrer">
 <title></title>
 <style>
@@ -55,21 +55,28 @@
   }
   iframe:not([src]),
   main:empty,
-  iframe[src] ~ input,
+  iframe[src]:not([hidden]) ~ input,
   main:not(:empty) ~ input {
     display: none;
   }
 </style>
 <iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-  allow="storage-access 'none'"></iframe>
+  allow="storage-access 'none'" credentialless></iframe>
+<iframe sandbox="allow-scripts allow-same-origin allow-forms" hidden></iframe>
 <main tabindex="-1"></main>
 <input autofocus spellcheck="false">
 <script>
-  const PROXY = 'bundle/service/';
+  const PROXY = 'bundle/';
   const input = document.querySelector('input');
-  const frame = document.querySelector('iframe');
+  const [frame, shell] = document.querySelectorAll('iframe');
   const main = document.querySelector('main');
+  const loaded = new Promise(done => shell.onload = done);
+  if (PROXY) shell.src = PROXY;
   let reload, seq = 0;
+  const relay = url => {
+    shell.hidden = !url;
+    loaded.then(() => shell.contentWindow.postMessage(url, location.origin));
+  };
   const el = (tag, text, parent = main) => {
     const node = parent.appendChild(document.createElement(tag));
     node.textContent = text ?? '';
@@ -135,6 +142,7 @@
     reload = () => show(href, false);
     const id = ++seq;
     frame.removeAttribute('src');
+    relay('');
     main.textContent = 'Loading…';
     main.focus();
     const render = await view().catch(err => () => main.textContent = err.message);
@@ -148,13 +156,15 @@
     reload = () => site(url, !proxy && !!PROXY, false);
     ++seq;
     main.textContent = '';
-    frame.src = proxy && PROXY ? PROXY + encodeURIComponent(url) : url;
+    relay(proxy ? url : '');
+    proxy ? frame.removeAttribute('src') : frame.src = url;
   };
   const search = (src, push = true) => {
     if (push) history.pushState({ src }, '');
     reload = () => frame.src = src;
     ++seq;
     main.textContent = '';
+    relay('');
     frame.src = src;
   };
   input.onkeydown = e => {
@@ -176,4 +186,3 @@
     }
   };
 </script>
-<iframe hidden src="bundle/boot.html"></iframe>

@@ -1,10 +1,10 @@
 # bundle — Ultraviolet service-worker proxy
 
-A self-hosted [Ultraviolet](https://github.com/titaniumnetwork-dev/Ultraviolet) web proxy. Request rewriting happens in a **service worker** running in the page's own origin, with the user's permission (they are using the page). No Chrome extension `webRequest`/`declarativeNetRequest` permission is needed and no other extension has to intercept requests — the proxy strips `X-Frame-Options` / `CSP: frame-ancestors` server-side, so any site loads in an iframe. Verified end-to-end: `github.com` (which sends `X-Frame-Options: deny`) renders inside `pop.html`'s iframe, same-origin.
+A self-hosted [Ultraviolet](https://github.com/titaniumnetwork-dev/Ultraviolet) web proxy. Request rewriting happens in a **service worker** running in the page's own origin, with the user's permission (they are using the page). No Chrome extension `webRequest`/`declarativeNetRequest` permission is needed and no other extension has to intercept requests — the proxy strips `X-Frame-Options` / `CSP: frame-ancestors` server-side, so any site loads in an iframe. Verified end-to-end: `github.com` (which sends `X-Frame-Options: deny`) renders inside `pop.html`.
 
 ## Contents
 
-Vendored runtime (pinned, versions must stay compatible — see note):
+Vendored runtime (pinned, byte-identical to the npm releases, versions must stay compatible — see note):
 
 | file | package | version |
 |---|---|---|
@@ -16,46 +16,46 @@ Vendored runtime (pinned, versions must stay compatible — see note):
 
 Glue (editable):
 
-- `uv.config.js` — UV config. Paths are computed from the service worker's own location (`new URL('./…', location)`), so the bundle works under any base path. `plain` codec (`encodeUrl === encodeURIComponent`).
-- `sw.js` — the service worker: imports UV and answers `fetch` for the prefix.
-- `register.js` — registers `sw.js` and wires the epoxy transport to the wisp backend, all relative to `import.meta.url`. Reads the backend URL `WISP` from `localStorage.wisp` (set per device with `key.html`, never committed) and exports `encode(url)`.
-- `key.html` — enter the wisp URL (`wss://host/<secret>/`) once per device; empty input clears it.
-- `boot.html` — headless page that just runs `register.js`'s `boot()`. `pop.html` embeds it in a hidden iframe so every device auto-registers the SW on first open.
-- `index.html` — standalone proxy page (search box + iframe).
-
-## Portability (works from any host / base path)
-
-All paths are relative or derived from `location` / `import.meta.url`, so you can host the folder at a domain root **or** a sub-path (`https://host/app/…`) and it still works — verified by serving the demo under `/app/`. The only origin-absolute value is the wisp endpoint, stored per device in `localStorage.wisp`.
+- `index.html` + `register.js` — the **shell**: a page that owns the proxied iframe. On load it wipes proxied state, registers `sw.js`, waits until it is active, and wires the epoxy transport to the wisp backend. It then loads URLs it receives by `postMessage` from a same-origin parent (`pop.html`), or from its own input when opened directly.
+- `sw.js` — the service worker: runs UV for the prefix and enforces the network policy below.
+- `uv.config.js` — UV config (`plain` codec, paths derived from `location`, so the bundle works under any base path) plus page-side hardening that runs in every proxied document and worker before UV's own code.
+- `key.html` — enter the wisp URL (`wss://host/<secret>/`) once per device; empty input clears it. Reload `pop.html` afterwards.
 
 ## Requirements
 
 1. **Secure context** — the page must be **https** (or `localhost`). A service worker will not register otherwise.
-2. **A wisp backend** — epoxy connects over WebSocket to a wisp server that relays TCP. Run one and enter its URL in `key.html`:
-
-   ```sh
-   npx @mercuryworkshop/wisp-js   # maintained; wisp-server-node is deprecated
-   ```
-
-   For a private server, `../wisp/server.mjs` (outside this repo) only accepts the path `/<secret>/` and only ports 80/443.
+2. **A wisp backend** — epoxy connects over WebSocket to a wisp server that relays TCP. `../wisp/server.mjs` (outside this repo) accepts only the path `/<secret>/`, only the `Origin` of this site (`ORIGIN` env, default `https://wintuxe10.github.io`), only port 443, and logs nothing.
 
 ## Chromebook with no Linux (Crostini) enabled
 
-This is the important case: a Chromebook with the Linux container **off** runs only Chrome, so it cannot host anything. It does not need to — **the entire proxy runs inside Chrome**: the service worker, the epoxy WebAssembly transport, the `SharedWorker`, and WebSockets are all native browser features and need no Linux. Linux is only ever needed to *run a server*.
+A Chromebook with the Linux container **off** runs only Chrome, so it cannot host anything. It does not need to — **the entire proxy runs inside Chrome**: the service worker, the epoxy WebAssembly transport, the `SharedWorker`, and WebSockets are all native browser features.
 
-So for a no-Linux Chromebook:
-
-1. **Host the files remotely over https** — any static host works (GitHub Pages, Netlify, Cloudflare Pages, an S3 bucket, a VPS). The Chromebook just opens `https://your-host/.../pop.html`.
-2. **Run the wisp backend on a remote always-on machine** (a VPS, a home server, a free wisp host — **not** the Chromebook). Over https the page auto-selects `wss://`.
-   - Enter its `wss://…/<secret>/` URL in `key.html` on each device.
-3. Open `pop.html` (or `bundle/index.html`) in the Chromebook's Chrome. The hidden `boot.html` iframe registers the SW and connects the transport automatically — no per-device setup, no extension, no Linux.
-
-`pop.html` itself is a static file and works the same way on any device; with `PROXY = 'bundle/service/'` it routes arbitrary sites through this bundle automatically, and Hugging Face browsing / Google search keep working directly.
+1. **Host the files remotely over https** — any static host works. The Chromebook just opens `https://your-host/.../pop.html`.
+2. **Run the wisp backend on a remote always-on machine** and enter its `wss://…/<secret>/` URL in `key.html` on each device.
+3. Open `pop.html`. It loads the shell in an iframe, which registers the SW and connects the transport — no extension, no Linux.
 
 ## Use
 
-- **Standalone:** open `/bundle/` (index.html), type a URL or search.
-- **From pop.html:** it embeds `boot.html` hidden, so opening `pop.html` registers the SW for the origin and sets the transport. `pop.html` has `const PROXY = 'bundle/service/'`; it builds `PROXY + encodeURIComponent(url)`, which is exactly a `plain`-codec UV URL. Set `PROXY = ''` to load sites directly (frameable sites only), or point it at any other header-stripping proxy.
+- **From pop.html:** `const PROXY = 'bundle/'` points at the shell. Sites are sent to it with `postMessage`; Hugging Face browsing and Google search load directly in a separate `credentialless` iframe. Set `PROXY = ''` to load everything directly (frameable sites only).
+- **Standalone:** open `/bundle/`, type a URL or search.
+
+## Security model
+
+Enforced:
+
+- **Nothing about browsing reaches the static host.** Proxied URLs only exist once the SW is active; the SW refuses every request outside this directory and re-issues its own static requests without a `Referer`.
+- **No direct connections from proxied pages.** Cross-origin requests fail in the SW; a CSP on every proxied response confines scripts, frames, forms and connections to the proxy prefix; `Link`, `Refresh`, reporting and speculation headers are dropped; the shell's CSP stops the proxied frame from navigating anywhere else.
+- **No top-level proxied pages.** The SW refuses them, so other websites cannot load content into this origin and proxied URLs never enter browser history. Links that ask for a new tab open in the same frame.
+- **Sites see what a normal browser shows them.** Cross-origin `Referer` and `document.referrer` are cut to the origin; `storage` events (which would carry the wisp key), `indexedDB.databases()`, `cookieStore`, `caches`, `Notification` and WebRTC are removed; camera, microphone, geolocation and other powerful features are denied.
+- **Nothing persists.** Every shell load deletes proxied cookies, storage, databases, caches and files. Only `wisp` and `bare-mux-path` survive.
+
+Not enforced:
+
+- All proxied sites share this origin. A page that deliberately breaks out of UV's JavaScript rewriting can read `localStorage.wisp`, the current session's proxied cookies, and script `pop.html`. Only serving the proxy from its own origin fixes that; keep nothing else that uses `localStorage` on this origin.
+- WebRTC is removed per realm; `frames[i]` of a fresh iframe still has it. Chrome's `WebRtcIPHandling` policy is the complete fix.
+- The tunnel provider sees destination hostnames (not content: epoxy does TLS in the browser). The static host sees that the files were fetched, and from which IP.
+- No popups (OAuth popups fail) and no `http://` sites.
 
 ## Updating
 
-Re-download pinned files from `https://cdn.jsdelivr.net/npm/<package>@<version>/dist/<file>`. Keep the bare-mux/epoxy versions in sync with the `BareClient` that UV bundles (see the compatibility note above) or the transport will break.
+Re-download pinned files from `https://cdn.jsdelivr.net/npm/<package>@<version>/dist/<file>`. Keep the bare-mux/epoxy versions in sync with the `BareClient` that UV bundles (see the compatibility note above) or the transport will break. GitHub Pages caches files for 10 minutes; hard-reload after a deploy.

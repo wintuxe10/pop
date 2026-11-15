@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; style-src 'sha256-45dfRPUzSnTHENbAX1hVJDl2Iyy95S7qpezj2qIylZQ='; script-src 'sha256-dHUOYrI2g16XvxRs2xUr0Z0tl9BmlEcs75CYvZ6p7jU='; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title></title>
 <style>
@@ -13,6 +15,7 @@
   input.onkeydown = e => {
     if (e.key !== 'Enter') return;
     const v = input.value.trim();
+    if (v && !v.startsWith('wss://')) return input.select();
     v ? localStorage.wisp = v : localStorage.removeItem('wisp');
     input.value = '';
     input.placeholder = v ? 'saved' : 'cleared';
