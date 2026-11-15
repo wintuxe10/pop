@@ -18,24 +18,25 @@ Glue (editable):
 
 - `uv.config.js` — UV config. Paths are computed from the service worker's own location (`new URL('./…', location)`), so the bundle works under any base path. `plain` codec (`encodeUrl === encodeURIComponent`).
 - `sw.js` — the service worker: imports UV and answers `fetch` for the prefix.
-- `register.js` — registers `sw.js` and wires the epoxy transport to the wisp backend, all relative to `import.meta.url`. Exports `WISP` (the backend URL) and `encode(url)`.
+- `register.js` — registers `sw.js` and wires the epoxy transport to the wisp backend, all relative to `import.meta.url`. Reads the backend URL `WISP` from `localStorage.wisp` (set per device with `key.html`, never committed) and exports `encode(url)`.
+- `key.html` — enter the wisp URL (`wss://host/<secret>/`) once per device; empty input clears it.
 - `boot.html` — headless page that just runs `register.js`'s `boot()`. `pop.html` embeds it in a hidden iframe so every device auto-registers the SW on first open.
 - `index.html` — standalone proxy page (search box + iframe).
 
 ## Portability (works from any host / base path)
 
-All paths are relative or derived from `location` / `import.meta.url`, so you can host the folder at a domain root **or** a sub-path (`https://host/app/…`) and it still works — verified by serving the demo under `/app/`. The only origin-absolute value is the wisp endpoint `WISP` in `register.js`, which defaults to `wss://<this-host>/wisp/`.
+All paths are relative or derived from `location` / `import.meta.url`, so you can host the folder at a domain root **or** a sub-path (`https://host/app/…`) and it still works — verified by serving the demo under `/app/`. The only origin-absolute value is the wisp endpoint, stored per device in `localStorage.wisp`.
 
 ## Requirements
 
 1. **Secure context** — the page must be **https** (or `localhost`). A service worker will not register otherwise.
-2. **A wisp backend** — epoxy connects over WebSocket to a wisp server that relays TCP. Run one and expose it where `WISP` points (default `/wisp/` on the page's origin):
+2. **A wisp backend** — epoxy connects over WebSocket to a wisp server that relays TCP. Run one and enter its URL in `key.html`:
 
    ```sh
    npx @mercuryworkshop/wisp-js   # maintained; wisp-server-node is deprecated
    ```
 
-   Co-host it at `/wisp/`, or set `WISP` in `register.js` to a different server, e.g. `wss://my-wisp.example/`.
+   For a private server, `../wisp/server.mjs` (outside this repo) only accepts the path `/<secret>/` and only ports 80/443.
 
 ## Chromebook with no Linux (Crostini) enabled
 
@@ -45,8 +46,7 @@ So for a no-Linux Chromebook:
 
 1. **Host the files remotely over https** — any static host works (GitHub Pages, Netlify, Cloudflare Pages, an S3 bucket, a VPS). The Chromebook just opens `https://your-host/.../pop.html`.
 2. **Run the wisp backend on a remote always-on machine** (a VPS, a home server, a free wisp host — **not** the Chromebook). Over https the page auto-selects `wss://`.
-   - If the static host can also run Node (a VPS), co-host wisp at `/wisp/` and leave `WISP` at its default.
-   - If the static host is static-only (Pages), run wisp elsewhere and set `WISP` in `register.js` to that `wss://…` URL.
+   - Enter its `wss://…/<secret>/` URL in `key.html` on each device.
 3. Open `pop.html` (or `bundle/index.html`) in the Chromebook's Chrome. The hidden `boot.html` iframe registers the SW and connects the transport automatically — no per-device setup, no extension, no Linux.
 
 `pop.html` itself is a static file and works the same way on any device; with `PROXY = 'bundle/service/'` it routes arbitrary sites through this bundle automatically, and Hugging Face browsing / Google search keep working directly.
