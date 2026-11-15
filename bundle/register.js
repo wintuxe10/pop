@@ -1,5 +1,5 @@
 import { BareMuxConnection } from './baremux/index.mjs';
-export const WISP = 'https://sarah-lots-mae-reserves.trycloudflare.com/';
+export const WISP = 'wss://sarah-lots-mae-reserves.trycloudflare.com/';
 export const encode = url => new URL('./service/', import.meta.url).pathname + encodeURIComponent(url);
 export async function boot(wisp = WISP) {
   if (!navigator.serviceWorker) throw Error('service worker unavailable (needs https or localhost)');
