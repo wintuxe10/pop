@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; style-src 'sha256-8uhB0iH9O6PK9lgaG+FBiaTF/iPxD8a8TSGBqcPHmpw='; script-src 'sha256-vk0fJ4yGAOLKXz2L7rSZaFUC/Znr1dh6j/lH0oa6NdI='; connect-src https://huggingface.co https://*.hf.co; frame-src 'self' https:; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+<meta name="referrer" content="no-referrer">
+<title></title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+  }
+  input {
+    margin: auto;
+    width: min(600px, 90vw);
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: #fff;
+    font-size: 16px;
+  }
+  iframe {
+    flex: 1;
+    border: 0;
+    outline: 0;
+  }
+  main {
+    flex: 1;
+    overflow: auto;
+    outline: 0;
+    padding: 16px max(16px, calc(50vw - 440px));
+    color: #ccc;
+    font: 15px/1.5 system-ui, sans-serif;
+  }
+  h1 {
+    font-size: 20px;
+  }
+  a {
+    color: #8ab4f8;
+  }
+  li span,
+  h1 + p {
+    color: #888;
+  }
+  pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+  }
+  iframe:not([src]),
+  main:empty,
+  iframe[src] ~ input,
+  main:not(:empty) ~ input {
+    display: none;
+  }
+</style>
+<iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+  allow="storage-access 'none'"></iframe>
+<main tabindex="-1"></main>
+<input autofocus spellcheck="false">
+<script>
+  const PROXY = 'bundle/service/';
+  const input = document.querySelector('input');
+  const frame = document.querySelector('iframe');
+  const main = document.querySelector('main');
+  let reload, seq = 0;
+  const el = (tag, text, parent = main) => {
+    const node = parent.appendChild(document.createElement(tag));
+    node.textContent = text ?? '';
+    return node;
+  };
+  const link = (path, text, parent) => {
+    const a = el('a', text, parent);
+    a.href = 'https://huggingface.co/' + path;
+    a.target = '_blank';
+    a.rel = 'noreferrer';
+    a.onclick = e => e.ctrlKey || e.shiftKey || e.metaKey || e.altKey || (e.preventDefault(), show(a.href));
+  };
+  const get = async (path, type = 'json') => {
+    const res = await fetch('https://huggingface.co' + path);
+    if (!res.ok) throw Error(`${res.status} ${res.statusText}: ${path}`);
+    return res[type]();
+  };
+  const prefix = kind => kind === 'models' ? '' : kind + '/';
+  const meta = i => [i.pipeline_tag, i.library_name, i.sdk, i.downloads != null && '↓ ' + i.downloads.toLocaleString(),
+    i.likes != null && '♥ ' + i.likes.toLocaleString(), i.lastModified && 'updated ' + i.lastModified.slice(0, 10)].filter(Boolean).join(' · ');
+  const list = async (kind, params = {}) => {
+    const items = await get(`/api/${kind}?` + new URLSearchParams({ sort: 'trendingScore', limit: 100, ...params }));
+    return () => {
+      el('h1', params.search ? `${kind}: ${params.search}` : params.author ? `${params.author}: ${kind}` : 'Trending ' + kind);
+      const ul = el('ul');
+      for (const item of items) {
+        const li = el('li', null, ul);
+        link(prefix(kind) + item.id, item.id, li);
+        el('span', ' ' + meta(item), li);
+      }
+      items.length || el('p', 'No results.');
+    };
+  };
+  const repo = async (kind, id) => {
+    const info = await get(`/api/${kind}/${id}`);
+    if (kind === 'spaces') {
+      if (!info.host) throw Error(info.id + ' has no running app');
+      return () => frame.src = info.host;
+    }
+    const path = prefix(kind) + info.id;
+    const readme = await get(`/${path}/resolve/main/README.md`, 'text').catch(() => '');
+    return () => {
+      link(path, info.id, el('h1'));
+      el('p', meta(info));
+      el('pre', readme.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trim() || 'No README.');
+    };
+  };
+  const reserved = ['api', 'docs', 'blog', 'papers', 'posts', 'search', 'collections', 'organizations', 'tasks',
+    'learn', 'settings', 'join', 'login', 'pricing', 'enterprise', 'inference', 'chat', 'new', 'new-space'];
+  const route = href => {
+    const url = URL.parse(href);
+    if (!/^(www\.)?(huggingface|hf)\.co$/i.test(url?.hostname)) return;
+    const [a, b, c] = url.pathname.split('/').filter(Boolean);
+    const q = url.searchParams.get('search');
+    if (!a) return () => list('models');
+    if (['models', 'datasets', 'spaces'].includes(a)) return b && c ? () => repo(a, `${b}/${c}`) : !b && (() => list(a, q ? { search: q } : {}));
+    if (!reserved.includes(a)) return b ? () => repo('models', `${a}/${b}`) : () => list('models', { author: a });
+  };
+  const show = async (href, push = true) => {
+    const view = route(href);
+    if (!view) return site(href);
+    if (push) history.pushState({ href }, '');
+    reload = () => show(href, false);
+    const id = ++seq;
+    frame.removeAttribute('src');
+    main.textContent = 'Loading…';
+    main.focus();
+    const render = await view().catch(err => () => main.textContent = err.message);
+    if (id === seq) {
+      main.textContent = '';
+      render();
+    }
+  };
+  const site = (url, proxy = !!PROXY, push = true) => {
+    if (push) history.pushState({ url, proxy }, '');
+    reload = () => site(url, !proxy && !!PROXY, false);
+    ++seq;
+    main.textContent = '';
+    frame.src = proxy && PROXY ? PROXY + encodeURIComponent(url) : url;
+  };
+  const search = (src, push = true) => {
+    if (push) history.pushState({ src }, '');
+    reload = () => frame.src = src;
+    ++seq;
+    main.textContent = '';
+    frame.src = src;
+  };
+  input.onkeydown = e => {
+    const text = input.value.trim();
+    if (e.key !== 'Enter' || e.repeat || e.isComposing || e.keyCode === 229 || !text) return;
+    const url = /^https?:\/\/\S*$/i.test(text) ? text
+      : /^(localhost|\[[\da-f:]+\]|[a-z\d-]+(\.[a-z\d-]+)+)(:\d+)?(\/\S*)?$/i.test(text) && (/^localhost/i.test(text) ? 'http://' : 'https://') + text;
+    if (url) {
+      e.ctrlKey ? navigator.clipboard.writeText(url) : show(url);
+      input.select();
+    } else search('https://www.google.com/search?igu=1&pws=0&q=' + encodeURIComponent(text));
+  };
+  input.onblur = () => setTimeout(() => input.focus());
+  onpopstate = ({ state }) => state?.src ? search(state.src, false) : state?.href ? show(state.href, false) : state?.url != null && site(state.url, state.proxy, false);
+  document.onkeydown = e => {
+    if (reload && e.altKey && e.key.toLowerCase() === 'r') {
+      e.preventDefault();
+      if (!e.repeat) reload();
+    }
+  };
+</script>
+<iframe hidden src="bundle/boot.html"></iframe>

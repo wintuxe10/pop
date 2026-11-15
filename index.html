@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title></title>
+<style>
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: #000; }
+  input { margin: auto; width: min(600px, 90vw); box-sizing: border-box; padding: 6px 8px; border: 0; outline: 0; background: none; color: #fff; font-size: 16px; }
+  iframe { flex: 1; border: 0; outline: 0; }
+  p { margin: auto; color: #f55; font: 14px system-ui, sans-serif; }
+  iframe:not([src]), iframe[src] ~ input, p:empty { display: none; }
+</style>
+<iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+<input autofocus spellcheck="false">
+<p></p>
+<script type="module">
+  import { boot, encode } from '/bundle/register.js';
+  const frame = document.querySelector('iframe');
+  const input = document.querySelector('input');
+  const err = document.querySelector('p');
+  boot().catch(e => err.textContent = e.message);
+  input.onkeydown = e => {
+    const text = input.value.trim();
+    if (e.key !== 'Enter' || e.repeat || e.isComposing || e.keyCode === 229 || !text) return;
+    const url = /^https?:\/\/\S*$/i.test(text) ? text
+      : /^(localhost|\[[\da-f:]+\]|[a-z\d-]+(\.[a-z\d-]+)+)(:\d+)?(\/\S*)?$/i.test(text) ? (/^localhost/i.test(text) ? 'http://' : 'https://') + text
+      : 'https://www.google.com/search?igu=1&pws=0&q=' + encodeURIComponent(text);
+    frame.src = encode(url);
+  };
+  input.onblur = () => setTimeout(() => input.focus());
+</script>

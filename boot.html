@@ -1,0 +1,7 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<title></title>
+<script type="module">
+  import { boot } from './register.js';
+  boot().then(() => parent.postMessage({ uv: 'ready' }, '*')).catch(e => parent.postMessage({ uv: 'error', message: e.message }, '*'));
+</script>
