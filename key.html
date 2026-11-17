@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; style-src 'sha256-45dfRPUzSnTHENbAX1hVJDl2Iyy95S7qpezj2qIylZQ='; script-src 'sha256-eHywtswzeIYhJyDs7m1P9w7vBM3CaLbewOpEcTvSASM='; connect-src https:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title></title>
+<style>
+  body { margin: 0; height: 100vh; display: flex; background: #000; }
+  input { margin: auto; width: min(600px, 90vw); box-sizing: border-box; padding: 6px 8px; border: 0; outline: 0; background: none; color: #fff; font-size: 16px; }
+</style>
+<input type="password" placeholder="wss://…/secret/" autofocus>
+<script>
+  const input = document.querySelector('input');
+  input.onkeydown = async e => {
+    if (e.key !== 'Enter' || e.repeat) return;
+    const v = input.value.trim();
+    if (v && !/^wss:\/\/[^/]+\/[^/]+\/$/.test(v)) return input.select();
+    try {
+      if (v && !(await fetch(v.replace('wss', 'https'), { method: 'POST', credentials: 'include' })).ok) throw 0;
+      v ? localStorage.wisp = v.replace(/[^/]+\/$/, '') : localStorage.removeItem('wisp');
+      input.value = '';
+      input.placeholder = v ? 'saved' : 'cleared';
+    } catch {
+      input.select();
+    }
+  };
+</script>

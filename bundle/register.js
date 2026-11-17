@@ -3,7 +3,7 @@ const frame = document.querySelector('iframe');
 const input = document.querySelector('input');
 const at = path => new URL(path, import.meta.url);
 const wipe = async () => {
-  for (const key of Object.keys(localStorage)) ['wisp', 'bare-mux-path'].includes(key) || localStorage.removeItem(key);
+  for (const key of Object.keys(localStorage)) key === 'wisp' || localStorage.removeItem(key);
   sessionStorage.clear();
   for (const key of await caches.keys()) await caches.delete(key);
   for (const cookie of await self.cookieStore?.getAll() ?? []) await cookieStore.delete(cookie);
@@ -23,7 +23,7 @@ const wipe = async () => {
   });
 };
 const boot = (async () => {
-  if (!localStorage.wisp) throw Error('no wisp server set: open bundle/key.html');
+  if (!localStorage.wisp) throw Error('no wisp server set: open key.html');
   if (!navigator.serviceWorker) throw Error('service worker unavailable (needs https or localhost)');
   await wipe();
   await navigator.serviceWorker.register(at('./sw.js'), { scope: at('./').pathname, updateViaCache: 'none' });

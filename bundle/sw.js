@@ -9,9 +9,10 @@ const policy = {
   'permissions-policy': deny.split(' ').map(name => name + '=()').join(', '),
   'x-dns-prefetch-control': 'off',
 };
-uv.on('request', ({ data }) => {
-  const ref = data.headers.referer && new URL(data.headers.referer);
-  if (ref && ref.origin !== data.url.origin) data.headers.referer = ref.origin + '/';
+uv.on('request', e => {
+  const { data } = e, ref = data.headers.referer && new URL(data.headers.referer);
+  if (data.url.protocol !== 'https:') e.respondWith(Response.error());
+  else if (ref && ref.origin !== data.url.origin) data.headers.referer = ref.origin + '/';
 });
 uv.on('response', ({ data: { headers } }) => {
   for (const name of drop) delete headers[name];
